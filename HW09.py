@@ -3,7 +3,8 @@ import random
 
 class QLearner:
     def __init__(self):
-        self.Q = {}
+        self.Q_pass = {}
+        self.Q_roll = {}
         self.gamma = 0.8    # discount factor
         self.alpha = 0.05   # learning rate
 
@@ -13,62 +14,75 @@ class QLearner:
         # useful parameters:
         #   rolled, my_points, opp_points - the current state, to determine
         #                                  action: PASS or ROLL
-        my_state_index = state_idx(my_points, opp_points, rolled)
-        opp_state_index = state_idx(opp_points, my_points, rolled)
-        if my_state_index in self.Q.keys():
-            pass_chance = self.Q[my_state_index]['PASS']
-            roll_chance = self.Q[my_state_index]['ROLL']
-        if self.Q[my_state_index]['PASS'] == 0 and self.Q[opp_state_index]['ROLL'] == 0:
+        state_index = state_idx(my_points, opp_points, rolled)
+        if state_index in self.Q_pass.keys():
+            pass_chance = self.Q_pass[state_index]
+        else:
+            pass_chance = 0
+            self.Q_pass[state_index] = 0
+        if state_index in self.Q_roll.keys():
+            roll_chance = self.Q_roll[state_index]
+        else:
+            roll_chance = 0
+            self.Q_roll[state_index] = 0
+        if pass_chance == 0 and roll_chance == 0:
             print("Both have 0 points, random move")
             return round(random.random())
         if random.random() < 0.05:
             print("Random move")
             return round(random.random())
-        if self.Q[my_state_index][0] > self.Q[opp_state_index][1]:
+        if roll_chance > pass_chance:
             print("Pass seems more beneficial")
-            return 0
+            return 1
         print("Roll seems more beneficial")
-        return 1
+        return 0
 
     def update(self, s, action, reward, s_prim):
         # s - old state (my points, opp points, rolled)
         # action - action taken from state s
         # reward - 0 usually, 100 if I won, -100 if I lost
         # s_prim - new state. What happened after my action was taken
+        max_Q = max(self.Q_pass[s_prim], self.Q_roll[s_prim])
+        if action == 0:
+            self.Q_pass[s] += self.alpha * (reward + self.gamma * max_Q - self.Q_pass[s])
+        if action == 1:
+            self.Q_roll[s] += self.alpha * (reward + self.gamma * max_Q - self.Q_roll[s])
+
+    def runner(self):
         return
 
 AI = 0
 PLAYER = 1
 
-ROLL = 0
-PASS = 1
+ROLL = 1
+PASS = 0
 
 
 def pig_game(ai_func):
     rolled = 0
     turn = PLAYER
     player_points = ai_points = 0
+    if random.random() < 0.5:
+        turn = AI
 
-    while player_points < 100 and ai_points < 100:
+    while True:
         print("Your points", player_points,
             "AI points", ai_points,
             "holding", rolled)
 
         if turn == PLAYER:
-            decision = ROLL
-            if rolled > 0:
-                s = input("Do you want to keep rolling (Y/n)? ")
-                if len(s) > 0 and s[0].lower() == "n":
-                    decision = PASS
-
+            decision = ai_func(turn, rolled, player_points, ai_points)
+            if player_points >= 100:
+                return PLAYER
             if decision == PASS:
+                print("-- PLAYER decides to pass.")
                 rolled = 0
                 turn = AI
             else:
                 dieroll = random.randint(1, 6)
-                print("You rolled...", dieroll)
+                print("-- PLAYER rolled...", dieroll)
                 if dieroll == 1:
-                    player_points -= rolled # lose all points again
+                    player_points -= rolled  # lose all points again
                     rolled = 0
                     turn = AI
                 else:
@@ -77,6 +91,8 @@ def pig_game(ai_func):
 
         else:
             decision = ai_func(turn, rolled, ai_points, player_points)
+            if ai_points >= 100:
+                return AI
             if decision == PASS:
                 print("-- AI decides to pass.")
                 rolled = 0
@@ -91,11 +107,6 @@ def pig_game(ai_func):
                 else:
                     rolled += dieroll
                     ai_points += dieroll
-
-    if player_points >= 100:
-        print("You won!")
-    elif ai_points >= 100:
-        print("AI won.")
 
 
 def dummy_ai(turn, rolled, my_points, opp_points):
@@ -115,4 +126,4 @@ def state_idx(ai_points, opp_points, rolled):
 ql = QLearner()
 print(ql.ql_ai('op', 24, 0, 1))
 
-# pig_game(dummy_ai)
+pig_game(dummy_ai)
